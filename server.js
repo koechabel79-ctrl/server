@@ -16,13 +16,11 @@ const fs = require('fs');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Database connection
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
     ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
 });
 
-// Test database connection
 pool.connect((err, client, release) => {
     if (err) {
         console.error('Error connecting to database:', err.stack);
@@ -32,7 +30,6 @@ pool.connect((err, client, release) => {
     }
 });
 
-// Middleware
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors({
     origin: process.env.FRONTEND_ORIGIN || 'https://airtimetest.onrender.com',
@@ -43,7 +40,6 @@ app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Session configuration
 app.use(session({
     store: new pgSession({
         pool: pool,
@@ -55,11 +51,10 @@ app.use(session({
     cookie: {
         secure: process.env.NODE_ENV === 'production',
         httpOnly: true,
-        maxAge: 24 * 60 * 60 * 1000 // 24 hours
+        maxAge: 24 * 60 * 60 * 1000
     }
 }));
 
-// Rate limiting
 const limiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 100,
@@ -67,7 +62,6 @@ const limiter = rateLimit({
 });
 app.use('/api/', limiter);
 
-// Strict rate limiting for admin login (prevent brute force)
 const adminLoginLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 5,
@@ -76,7 +70,6 @@ const adminLoginLimiter = rateLimit({
     legacyHeaders: false
 });
 
-// Environment variables
 const PAYNECTA_API_KEY = process.env.PAYNECTA_API_KEY;
 const PAYNECTA_EMAIL = process.env.PAYNECTA_EMAIL;
 const STATUM_CONSUMER_KEY = process.env.STATUM_CONSUMER_KEY;
@@ -85,7 +78,6 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '3462Abel@#';
 const CALLBACK_BASE_URL = process.env.CALLBACK_BASE_URL || 'https://airtimeserver.onrender.com';
 const PAYHERO_LINK = 'https://short.payhero.co.ke/s/oEvAxA8Xx6cDoBLxntShmF';
 
-// Bonus calculation for deposits
 function calculateBonus(amount) {
     if (amount >= 50) {
         return 6;
@@ -93,32 +85,19 @@ function calculateBonus(amount) {
     return 0;
 }
 
-// Airtime cost calculation (user pays 20, gets 18 worth of airtime)
 function calculateAirtimeCost(amount) {
     return Math.floor(amount * 0.9);
 }
 
-// ===================== USER ROUTES =====================
-
-// Check if username exists
-app.get('/api/users/check-username/:username', async (req, res) => {
-    try {
-        const { username } = req.params;
-        const result = await pool.query('SELECT id FROM users WHERE LOWER(username) = LOWER($1)', [username]);
-        res.json({ exists: result.rows.length > 0 });
-    } catch (error) {
-        console.error('Check username error:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
-    }
-});
-
-// Check if email has connected username
 app.get('/api/users/check-email/:email', async (req, res) => {
     try {
         const { email } = req.params;
-        const result = await pool.query('SELECT username FROM users WHERE LOWER(email) = LOWER($1)', [email]);
+        const result = await pool.query('SELECT id, balance, bonus_balance FROM users WHERE LOWER(email) = LOWER($1)', [email]);
         if (result.rows.length > 0) {
-            res.json({ exists: true, username: result.rows[0].username });
+            res.json({ 
+                exists: true, 
+                balance: parseFloat(result.rows[0].balance) + parseFloat(result.rows[0].bonus_balance)
+            });
         } else {
             res.json({ exists: false });
         }
@@ -128,33 +107,27 @@ app.get('/api/users/check-email/:email', async (req, res) => {
     }
 });
 
-// Register new user
 app.post('/api/users/register', async (req, res) => {
     try {
-        const { username, email, phone, firebase_uid } = req.body;
+        const { email } = req.body;
         
-        // Check if username already exists
-        const usernameCheck = await pool.query('SELECT id FROM users WHERE LOWER(username) = LOWER($1)', [username]);
-        if (usernameCheck.rows.length > 0) {
-            return res.status(400).json({ success: false, message: 'Username already taken' });
+        if (!email) {
+            return res.status(400).json({ success: false, message: 'Email is required' });
         }
         
-        // Check if email already exists
         const emailCheck = await pool.query('SELECT id FROM users WHERE LOWER(email) = LOWER($1)', [email]);
         if (emailCheck.rows.length > 0) {
             return res.status(400).json({ success: false, message: 'Email already registered' });
         }
         
         const id = uuidv4();
-        const formattedPhone = phone.startsWith('254') ? phone : `254${phone.replace(/^0/, '')}`;
         
         await pool.query(
-            `INSERT INTO users (id, username, email, phone, firebase_uid, balance, bonus_balance, is_disabled, created_at)
-             VALUES ($1, $2, $3, $4, $5, 0, 0, false, NOW())`,
-            [id, username, email, formattedPhone, firebase_uid]
+            `INSERT INTO users (id, email, balance, bonus_balance, is_disabled, created_at)
+             VALUES ($1, $2, 0, 0, false, NOW())`,
+            [id, email]
         );
         
-        // Create welcome notification
         await pool.query(
             `INSERT INTO notifications (id, user_id, scope, title, message, is_read, created_at)
              VALUES ($1, $2, 'user', 'Welcome to Airtime Solution Kenya! 🎉', 'Thank you for joining us. Start by depositing funds to buy airtime.', false, NOW())`,
@@ -168,12 +141,27 @@ app.post('/api/users/register', async (req, res) => {
     }
 });
 
-// Get user by email (for login)
+app.post('/api/users/update-firebase-uid', async (req, res) => {
+    try {
+        const { email, firebase_uid } = req.body;
+        
+        await pool.query(
+            'UPDATE users SET firebase_uid = $1 WHERE LOWER(email) = LOWER($2)',
+            [firebase_uid, email]
+        );
+        
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Update firebase uid error:', error);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
 app.get('/api/users/by-email/:email', async (req, res) => {
     try {
         const { email } = req.params;
         const result = await pool.query(
-            'SELECT id, username, email, phone, balance, bonus_balance, is_disabled FROM users WHERE LOWER(email) = LOWER($1)',
+            'SELECT id, email, balance, bonus_balance, is_disabled FROM users WHERE LOWER(email) = LOWER($1)',
             [email]
         );
         
@@ -185,7 +173,6 @@ app.get('/api/users/by-email/:email', async (req, res) => {
             return res.status(403).json({ success: false, message: 'Account is disabled. Contact support.' });
         }
         
-        // Update last login
         await pool.query('UPDATE users SET last_login_at = NOW() WHERE id = $1', [result.rows[0].id]);
         
         res.json({ success: true, user: result.rows[0] });
@@ -195,13 +182,12 @@ app.get('/api/users/by-email/:email', async (req, res) => {
     }
 });
 
-// Get user balance by username (for auto-refresh)
-app.get('/api/users/balance/:username', async (req, res) => {
+app.get('/api/users/balance-by-email/:email', async (req, res) => {
     try {
-        const { username } = req.params;
+        const { email } = req.params;
         const result = await pool.query(
-            'SELECT balance, bonus_balance FROM users WHERE LOWER(username) = LOWER($1)',
-            [username]
+            'SELECT balance, bonus_balance FROM users WHERE LOWER(email) = LOWER($1)',
+            [email]
         );
         
         if (result.rows.length === 0) {
@@ -220,14 +206,13 @@ app.get('/api/users/balance/:username', async (req, res) => {
     }
 });
 
-// Get user profile
-app.get('/api/users/profile/:username', async (req, res) => {
+app.get('/api/users/profile/:email', async (req, res) => {
     try {
-        const { username } = req.params;
+        const { email } = req.params;
         const result = await pool.query(
-            `SELECT id, username, email, phone, balance, bonus_balance, created_at, last_login_at 
-             FROM users WHERE LOWER(username) = LOWER($1)`,
-            [username]
+            `SELECT id, email, balance, bonus_balance, created_at, last_login_at 
+             FROM users WHERE LOWER(email) = LOWER($1)`,
+            [email]
         );
         
         if (result.rows.length === 0) {
@@ -241,23 +226,19 @@ app.get('/api/users/profile/:username', async (req, res) => {
     }
 });
 
-// ===================== PAYNECTA PAYMENT ROUTES =====================
-
-// Initialize STK Push deposit
 app.post('/api/payments/deposit', async (req, res) => {
     try {
-        const { phone, amount, username } = req.body;
+        const { phone, amount, email } = req.body;
         
-        if (!phone || !amount || !username) {
-            return res.status(400).json({ success: false, message: 'Phone, amount, and username are required' });
+        if (!phone || !amount || !email) {
+            return res.status(400).json({ success: false, message: 'Phone, amount, and email are required' });
         }
         
         if (parseFloat(amount) < 10) {
             return res.status(400).json({ success: false, message: 'Minimum deposit is KES 10' });
         }
         
-        // Get user
-        const userResult = await pool.query('SELECT id FROM users WHERE LOWER(username) = LOWER($1)', [username]);
+        const userResult = await pool.query('SELECT id FROM users WHERE LOWER(email) = LOWER($1)', [email]);
         if (userResult.rows.length === 0) {
             return res.status(404).json({ success: false, message: 'User not found' });
         }
@@ -266,7 +247,6 @@ app.post('/api/payments/deposit', async (req, res) => {
         const formattedPhone = phone.startsWith('254') ? phone : `254${phone.replace(/^0/, '')}`;
         const reference = `DEP-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
         
-        // Create pending transaction
         const transactionId = uuidv4();
         await pool.query(
             `INSERT INTO transactions (id, user_id, type, amount, fee, bonus, status, external_provider, phone, reference, created_at)
@@ -274,7 +254,6 @@ app.post('/api/payments/deposit', async (req, res) => {
             [transactionId, userId, amount, calculateBonus(parseFloat(amount)), formattedPhone, reference]
         );
         
-        // Call Paynecta STK Push API
         const paynectaResponse = await axios.post('https://paynecta.co.ke/api/v1/payments/initiate', {
             phone: formattedPhone,
             amount: parseFloat(amount),
@@ -293,10 +272,10 @@ app.post('/api/payments/deposit', async (req, res) => {
                 success: true,
                 message: 'STK Push sent. Please enter your M-Pesa PIN.',
                 reference: reference,
-                transactionId: transactionId
+                transactionId: transactionId,
+                bonus: calculateBonus(parseFloat(amount))
             });
         } else {
-            // Update transaction to failed
             await pool.query('UPDATE transactions SET status = $1 WHERE id = $2', ['failed', transactionId]);
             res.status(400).json({ success: false, message: paynectaResponse.data.message || 'Payment initiation failed' });
         }
@@ -306,11 +285,9 @@ app.post('/api/payments/deposit', async (req, res) => {
     }
 });
 
-// Paynecta callback
 app.post('/api/payments/paynecta/callback', async (req, res) => {
     try {
         console.log('Paynecta callback received:', JSON.stringify(req.body));
-        console.log('Callback from IP:', req.ip);
         
         const { reference, status, mpesa_code, amount } = req.body;
         
@@ -318,13 +295,11 @@ app.post('/api/payments/paynecta/callback', async (req, res) => {
             return res.status(400).json({ success: false, message: 'Reference required' });
         }
         
-        // Validate reference format (must start with DEP- and be our format)
         if (!reference.startsWith('DEP-')) {
             console.warn('Invalid reference format:', reference);
             return res.status(400).json({ success: false, message: 'Invalid reference format' });
         }
         
-        // Find transaction - must exist and be pending
         const transactionResult = await pool.query(
             'SELECT id, user_id, amount, bonus, status FROM transactions WHERE reference = $1',
             [reference]
@@ -337,20 +312,17 @@ app.post('/api/payments/paynecta/callback', async (req, res) => {
         
         const transaction = transactionResult.rows[0];
         
-        // Prevent double-processing - only process pending transactions
         if (transaction.status !== 'pending') {
             console.log('Transaction already processed:', reference, transaction.status);
             return res.json({ success: true, message: 'Transaction already processed' });
         }
         
         if (status === 'success' || status === 'completed') {
-            // Update transaction
             await pool.query(
                 `UPDATE transactions SET status = 'completed', metadata = $1 WHERE id = $2`,
                 [JSON.stringify({ mpesa_code }), transaction.id]
             );
             
-            // Credit user balance
             const totalAmount = parseFloat(transaction.amount);
             const bonus = parseFloat(transaction.bonus);
             
@@ -359,7 +331,6 @@ app.post('/api/payments/paynecta/callback', async (req, res) => {
                 [totalAmount, bonus, transaction.user_id]
             );
             
-            // Check for pending airtime purchases
             const pendingPurchase = await pool.query(
                 `SELECT id, target_phone, amount FROM pending_purchases 
                  WHERE user_id = $1 AND status = 'awaiting_funds' 
@@ -369,13 +340,11 @@ app.post('/api/payments/paynecta/callback', async (req, res) => {
             
             if (pendingPurchase.rows.length > 0) {
                 const purchase = pendingPurchase.rows[0];
-                // Auto-fulfill the pending purchase
                 await processPendingAirtimePurchase(purchase.id, transaction.user_id);
             }
             
             console.log(`Deposit successful for user ${transaction.user_id}: KES ${totalAmount} + ${bonus} bonus`);
         } else {
-            // Update transaction to failed
             await pool.query('UPDATE transactions SET status = $1 WHERE id = $2', ['failed', transaction.id]);
         }
         
@@ -386,7 +355,6 @@ app.post('/api/payments/paynecta/callback', async (req, res) => {
     }
 });
 
-// Query payment status
 app.get('/api/payments/status/:reference', async (req, res) => {
     try {
         const { reference } = req.params;
@@ -406,23 +374,20 @@ app.get('/api/payments/status/:reference', async (req, res) => {
     }
 });
 
-// Verify deposit with M-Pesa code
 app.post('/api/payments/verify-deposit', async (req, res) => {
     try {
-        const { mpesa_code, username, amount } = req.body;
+        const { mpesa_code, email, amount } = req.body;
         
-        if (!mpesa_code || !username) {
-            return res.status(400).json({ success: false, message: 'M-Pesa code and username are required' });
+        if (!mpesa_code || !email) {
+            return res.status(400).json({ success: false, message: 'M-Pesa code and email are required' });
         }
         
-        // Get user
-        const userResult = await pool.query('SELECT id FROM users WHERE LOWER(username) = LOWER($1)', [username]);
+        const userResult = await pool.query('SELECT id FROM users WHERE LOWER(email) = LOWER($1)', [email]);
         if (userResult.rows.length === 0) {
             return res.status(404).json({ success: false, message: 'User not found' });
         }
         const userId = userResult.rows[0].id;
         
-        // Check if already verified
         const existingVerification = await pool.query(
             'SELECT id, status FROM deposit_verifications WHERE UPPER(mpesa_code) = UPPER($1)',
             [mpesa_code]
@@ -436,7 +401,6 @@ app.post('/api/payments/verify-deposit', async (req, res) => {
             return res.json({ success: true, message: 'Verification already submitted, awaiting review' });
         }
         
-        // Check if already received
         const existingTransaction = await pool.query(
             `SELECT id FROM transactions WHERE metadata->>'mpesa_code' = $1 AND status = 'completed'`,
             [mpesa_code.toUpperCase()]
@@ -446,7 +410,6 @@ app.post('/api/payments/verify-deposit', async (req, res) => {
             return res.status(400).json({ success: false, message: 'This deposit has already been credited to your account' });
         }
         
-        // Create verification request
         await pool.query(
             `INSERT INTO deposit_verifications (id, user_id, mpesa_code, amount_claimed, status, submitted_at)
              VALUES ($1, $2, $3, $4, 'pending', NOW())`,
@@ -460,15 +423,13 @@ app.post('/api/payments/verify-deposit', async (req, res) => {
     }
 });
 
-// Generate PayHero payment link
 app.post('/api/payments/payhero-link', async (req, res) => {
     try {
-        const { phone, amount, username } = req.body;
+        const { phone, amount, email } = req.body;
         
         const formattedPhone = phone.startsWith('254') ? phone : `254${phone.replace(/^0/, '')}`;
         
-        // PayHero link with autofill parameters
-        const payHeroUrl = `${PAYHERO_LINK}?phone=${formattedPhone}&amount=${amount}&name=${encodeURIComponent(username)}&reference=${encodeURIComponent('#airtime deposit')}`;
+        const payHeroUrl = `${PAYHERO_LINK}?phone=${formattedPhone}&amount=${amount}&name=${encodeURIComponent(email)}&reference=${encodeURIComponent('#airtime deposit')}`;
         
         res.json({ success: true, paymentLink: payHeroUrl });
     } catch (error) {
@@ -477,12 +438,8 @@ app.post('/api/payments/payhero-link', async (req, res) => {
     }
 });
 
-// ===================== STATUM AIRTIME ROUTES =====================
-
-// Check float balance
 app.get('/api/airtime/float-status', async (req, res) => {
     try {
-        // This would check Statum float balance - for now return a flag from settings
         const result = await pool.query("SELECT value FROM settings WHERE key = 'float_low'");
         const isLow = result.rows.length > 0 && result.rows[0].value === 'true';
         res.json({ success: true, floatLow: isLow });
@@ -492,29 +449,26 @@ app.get('/api/airtime/float-status', async (req, res) => {
     }
 });
 
-// Buy airtime (using balance)
 app.post('/api/airtime/buy', async (req, res) => {
     try {
-        const { phone, amount, username } = req.body;
+        const { phone, amount, email } = req.body;
         
-        if (!phone || !amount || !username) {
-            return res.status(400).json({ success: false, message: 'Phone, amount, and username are required' });
+        if (!phone || !amount || !email) {
+            return res.status(400).json({ success: false, message: 'Phone, amount, and email are required' });
         }
         
         if (parseFloat(amount) < 5) {
             return res.status(400).json({ success: false, message: 'Minimum airtime is KES 5' });
         }
         
-        // Check float status
         const floatResult = await pool.query("SELECT value FROM settings WHERE key = 'float_low'");
         if (floatResult.rows.length > 0 && floatResult.rows[0].value === 'true') {
             return res.status(503).json({ success: false, message: 'Airtime service temporarily unavailable. Please try again later.' });
         }
         
-        // Get user
         const userResult = await pool.query(
-            'SELECT id, balance, bonus_balance FROM users WHERE LOWER(username) = LOWER($1)',
-            [username]
+            'SELECT id, balance, bonus_balance FROM users WHERE LOWER(email) = LOWER($1)',
+            [email]
         );
         
         if (userResult.rows.length === 0) {
@@ -538,10 +492,8 @@ app.post('/api/airtime/buy', async (req, res) => {
         const formattedPhone = phone.startsWith('254') ? phone : `254${phone.replace(/^0/, '')}`;
         const reference = `AIR-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
         
-        // Calculate actual airtime (user pays 20, gets 18 worth)
         const actualAirtime = calculateAirtimeCost(airtimeAmount);
         
-        // Deduct from balance (use bonus first)
         let remainingAmount = airtimeAmount;
         let bonusUsed = 0;
         let balanceUsed = 0;
@@ -552,7 +504,6 @@ app.post('/api/airtime/buy', async (req, res) => {
         }
         balanceUsed = remainingAmount;
         
-        // Create transaction
         const transactionId = uuidv4();
         await pool.query(
             `INSERT INTO transactions (id, user_id, type, amount, fee, bonus, status, external_provider, phone, reference, metadata, created_at)
@@ -560,7 +511,6 @@ app.post('/api/airtime/buy', async (req, res) => {
             [transactionId, user.id, airtimeAmount, airtimeAmount - actualAirtime, formattedPhone, reference, JSON.stringify({ actual_airtime: actualAirtime })]
         );
         
-        // Call Statum API
         const statumAuth = Buffer.from(`${STATUM_CONSUMER_KEY}:${STATUM_CONSUMER_SECRET}`).toString('base64');
         
         const statumResponse = await axios.post('https://api.statum.co.ke/api/v2/airtime', {
@@ -574,13 +524,11 @@ app.post('/api/airtime/buy', async (req, res) => {
         });
         
         if (statumResponse.data.status_code === 200) {
-            // Update user balance
             await pool.query(
                 'UPDATE users SET balance = balance - $1, bonus_balance = bonus_balance - $2 WHERE id = $3',
                 [balanceUsed, bonusUsed, user.id]
             );
             
-            // Update transaction
             await pool.query(
                 `UPDATE transactions SET status = 'completed', metadata = $1 WHERE id = $2`,
                 [JSON.stringify({ actual_airtime: actualAirtime, statum_request_id: statumResponse.data.request_id }), transactionId]
@@ -588,59 +536,42 @@ app.post('/api/airtime/buy', async (req, res) => {
             
             res.json({
                 success: true,
-                message: `KES ${actualAirtime} airtime sent to ${formattedPhone}`,
-                reference: reference,
-                airtimeSent: actualAirtime
+                message: `Airtime sent! KES ${actualAirtime} to ${formattedPhone}`,
+                airtimeSent: actualAirtime,
+                reference: reference
             });
         } else {
             await pool.query('UPDATE transactions SET status = $1 WHERE id = $2', ['failed', transactionId]);
             res.status(400).json({ success: false, message: 'Airtime purchase failed. Please try again.' });
         }
     } catch (error) {
-        console.error('Airtime error:', error.response?.data || error);
+        console.error('Buy airtime error:', error.response?.data || error);
         res.status(500).json({ success: false, message: 'Airtime service error. Please try again.' });
     }
 });
 
-// Buy airtime directly with payment
-app.post('/api/airtime/buy-direct', async (req, res) => {
+app.post('/api/airtime/direct', async (req, res) => {
     try {
-        const { phone_to_receive, phone_to_pay, amount, username } = req.body;
+        const { phone_to_receive, phone_to_pay, amount } = req.body;
         
         if (!phone_to_receive || !phone_to_pay || !amount) {
             return res.status(400).json({ success: false, message: 'All fields are required' });
         }
         
-        // Check float status
+        if (parseFloat(amount) < 5) {
+            return res.status(400).json({ success: false, message: 'Minimum airtime is KES 5' });
+        }
+        
         const floatResult = await pool.query("SELECT value FROM settings WHERE key = 'float_low'");
         if (floatResult.rows.length > 0 && floatResult.rows[0].value === 'true') {
-            return res.status(503).json({ success: false, message: 'Airtime service temporarily unavailable. Please try again later.' });
+            return res.status(503).json({ success: false, message: 'Airtime service temporarily unavailable.' });
         }
         
         const formattedPayPhone = phone_to_pay.startsWith('254') ? phone_to_pay : `254${phone_to_pay.replace(/^0/, '')}`;
         const formattedReceivePhone = phone_to_receive.startsWith('254') ? phone_to_receive : `254${phone_to_receive.replace(/^0/, '')}`;
         const reference = `DAIR-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-        
-        // Get user if logged in
-        let userId = null;
-        if (username) {
-            const userResult = await pool.query('SELECT id FROM users WHERE LOWER(username) = LOWER($1)', [username]);
-            if (userResult.rows.length > 0) {
-                userId = userResult.rows[0].id;
-            }
-        }
-        
         const actualAirtime = calculateAirtimeCost(parseFloat(amount));
         
-        // Create pending purchase
-        const purchaseId = uuidv4();
-        await pool.query(
-            `INSERT INTO pending_purchases (id, user_id, target_phone, amount, status, deposit_reference, initiated_at)
-             VALUES ($1, $2, $3, $4, 'awaiting_funds', $5, NOW())`,
-            [purchaseId, userId, formattedReceivePhone, actualAirtime, reference]
-        );
-        
-        // Initiate STK push
         const paynectaResponse = await axios.post('https://paynecta.co.ke/api/v1/payments/initiate', {
             phone: formattedPayPhone,
             amount: parseFloat(amount),
@@ -655,13 +586,19 @@ app.post('/api/airtime/buy-direct', async (req, res) => {
         });
         
         if (paynectaResponse.data.success) {
+            await pool.query(
+                `INSERT INTO pending_purchases (id, target_phone, amount, status, deposit_reference, initiated_at)
+                 VALUES ($1, $2, $3, 'awaiting_payment', $4, NOW())`,
+                [uuidv4(), formattedReceivePhone, actualAirtime, reference]
+            );
+            
             res.json({
                 success: true,
-                message: 'STK Push sent. Complete payment to receive airtime.',
-                reference: reference
+                message: 'STK Push sent! Complete payment to receive airtime.',
+                reference: reference,
+                airtime_to_receive: actualAirtime
             });
         } else {
-            await pool.query('UPDATE pending_purchases SET status = $1 WHERE id = $2', ['expired', purchaseId]);
             res.status(400).json({ success: false, message: 'Payment initiation failed' });
         }
     } catch (error) {
@@ -670,256 +607,101 @@ app.post('/api/airtime/buy-direct', async (req, res) => {
     }
 });
 
-// Direct airtime payment callback
-app.post('/api/payments/direct-airtime/callback', async (req, res) => {
-    try {
-        console.log('Direct airtime callback received:', req.body);
-        
-        const { reference, status } = req.body;
-        
-        if (!reference) {
-            return res.status(400).json({ success: false, message: 'Reference required' });
-        }
-        
-        const purchaseResult = await pool.query(
-            'SELECT id, target_phone, amount FROM pending_purchases WHERE deposit_reference = $1',
-            [reference]
-        );
-        
-        if (purchaseResult.rows.length === 0) {
-            return res.status(404).json({ success: false, message: 'Purchase not found' });
-        }
-        
-        const purchase = purchaseResult.rows[0];
-        
-        if (status === 'success' || status === 'completed') {
-            // Send airtime via Statum
-            const statumAuth = Buffer.from(`${STATUM_CONSUMER_KEY}:${STATUM_CONSUMER_SECRET}`).toString('base64');
-            
-            const statumResponse = await axios.post('https://api.statum.co.ke/api/v2/airtime', {
-                phone_number: purchase.target_phone,
-                amount: purchase.amount.toString()
-            }, {
-                headers: {
-                    'Authorization': `Basic ${statumAuth}`,
-                    'Content-Type': 'application/json'
-                }
-            });
-            
-            if (statumResponse.data.status_code === 200) {
-                await pool.query('UPDATE pending_purchases SET status = $1 WHERE id = $2', ['completed', purchase.id]);
-            } else {
-                await pool.query('UPDATE pending_purchases SET status = $1 WHERE id = $2', ['processing', purchase.id]);
-            }
-        } else {
-            await pool.query('UPDATE pending_purchases SET status = $1 WHERE id = $2', ['expired', purchase.id]);
-        }
-        
-        res.json({ success: true, message: 'Callback processed' });
-    } catch (error) {
-        console.error('Direct airtime callback error:', error);
-        res.status(500).json({ success: false, message: 'Callback processing error' });
-    }
-});
-
-// Store pending purchase for insufficient balance
-app.post('/api/airtime/pending', async (req, res) => {
-    try {
-        const { phone, amount, username } = req.body;
-        
-        const userResult = await pool.query('SELECT id FROM users WHERE LOWER(username) = LOWER($1)', [username]);
-        if (userResult.rows.length === 0) {
-            return res.status(404).json({ success: false, message: 'User not found' });
-        }
-        
-        const userId = userResult.rows[0].id;
-        const formattedPhone = phone.startsWith('254') ? phone : `254${phone.replace(/^0/, '')}`;
-        
-        const purchaseId = uuidv4();
-        await pool.query(
-            `INSERT INTO pending_purchases (id, user_id, target_phone, amount, status, initiated_at)
-             VALUES ($1, $2, $3, $4, 'awaiting_funds', NOW())`,
-            [purchaseId, userId, formattedPhone, calculateAirtimeCost(parseFloat(amount))]
-        );
-        
-        res.json({ success: true, purchaseId: purchaseId });
-    } catch (error) {
-        console.error('Pending purchase error:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
-    }
-});
-
-// Process pending airtime purchase
 async function processPendingAirtimePurchase(purchaseId, userId) {
     try {
         const purchaseResult = await pool.query(
-            'SELECT id, target_phone, amount FROM pending_purchases WHERE id = $1 AND user_id = $2 AND status = $3',
-            [purchaseId, userId, 'awaiting_funds']
+            'SELECT target_phone, amount FROM pending_purchases WHERE id = $1',
+            [purchaseId]
         );
         
         if (purchaseResult.rows.length === 0) return;
         
         const purchase = purchaseResult.rows[0];
-        const userResult = await pool.query('SELECT balance, bonus_balance FROM users WHERE id = $1', [userId]);
+        const statumAuth = Buffer.from(`${STATUM_CONSUMER_KEY}:${STATUM_CONSUMER_SECRET}`).toString('base64');
         
-        if (userResult.rows.length === 0) return;
-        
-        const user = userResult.rows[0];
-        const totalBalance = parseFloat(user.balance) + parseFloat(user.bonus_balance);
-        
-        if (totalBalance >= parseFloat(purchase.amount)) {
-            // Process the purchase
-            const statumAuth = Buffer.from(`${STATUM_CONSUMER_KEY}:${STATUM_CONSUMER_SECRET}`).toString('base64');
-            
-            const statumResponse = await axios.post('https://api.statum.co.ke/api/v2/airtime', {
-                phone_number: purchase.target_phone,
-                amount: purchase.amount.toString()
-            }, {
-                headers: {
-                    'Authorization': `Basic ${statumAuth}`,
-                    'Content-Type': 'application/json'
-                }
-            });
-            
-            if (statumResponse.data.status_code === 200) {
-                // Deduct balance
-                await pool.query(
-                    'UPDATE users SET balance = balance - $1 WHERE id = $2',
-                    [purchase.amount, userId]
-                );
-                
-                await pool.query('UPDATE pending_purchases SET status = $1 WHERE id = $2', ['completed', purchaseId]);
+        const statumResponse = await axios.post('https://api.statum.co.ke/api/v2/airtime', {
+            phone_number: purchase.target_phone,
+            amount: purchase.amount.toString()
+        }, {
+            headers: {
+                'Authorization': `Basic ${statumAuth}`,
+                'Content-Type': 'application/json'
             }
+        });
+        
+        if (statumResponse.data.status_code === 200) {
+            await pool.query('UPDATE pending_purchases SET status = $1 WHERE id = $2', ['completed', purchaseId]);
+            
+            await pool.query(
+                `INSERT INTO notifications (id, user_id, scope, title, message, is_read, created_at)
+                 VALUES ($1, $2, 'user', 'Airtime Sent! 📱', $3, false, NOW())`,
+                [uuidv4(), userId, `KES ${purchase.amount} airtime has been sent to ${purchase.target_phone}`]
+            );
+        } else {
+            await pool.query(
+                'UPDATE pending_purchases SET status = $1, retry_count = retry_count + 1 WHERE id = $2',
+                ['failed', purchaseId]
+            );
         }
     } catch (error) {
         console.error('Process pending purchase error:', error);
     }
 }
 
-// Statum callback
-app.post('/api/airtime/statum/callback', async (req, res) => {
+app.get('/api/transactions/:email', async (req, res) => {
     try {
-        console.log('Statum callback received:', req.body);
-        res.json({ success: true, message: 'Callback received' });
-    } catch (error) {
-        console.error('Statum callback error:', error);
-        res.status(500).json({ success: false, message: 'Callback error' });
-    }
-});
-
-// ===================== TRANSACTION ROUTES =====================
-
-// Get user transactions
-app.get('/api/transactions/:username', async (req, res) => {
-    try {
-        const { username } = req.params;
-        const limit = parseInt(req.query.limit) || 50;
-        const offset = parseInt(req.query.offset) || 0;
+        const { email } = req.params;
         
-        const userResult = await pool.query('SELECT id FROM users WHERE LOWER(username) = LOWER($1)', [username]);
+        const userResult = await pool.query('SELECT id FROM users WHERE LOWER(email) = LOWER($1)', [email]);
         if (userResult.rows.length === 0) {
             return res.status(404).json({ success: false, message: 'User not found' });
         }
         
-        const userId = userResult.rows[0].id;
-        
-        const transactions = await pool.query(
-            `SELECT id, type, amount, fee, bonus, status, phone, reference, created_at 
-             FROM transactions WHERE user_id = $1 
-             ORDER BY created_at DESC LIMIT $2 OFFSET $3`,
-            [userId, limit, offset]
+        const result = await pool.query(
+            `SELECT id, type, amount, fee, bonus, status, phone, reference, created_at
+             FROM transactions WHERE user_id = $1 ORDER BY created_at DESC LIMIT 100`,
+            [userResult.rows[0].id]
         );
         
-        res.json({ success: true, transactions: transactions.rows });
+        res.json({ success: true, transactions: result.rows });
     } catch (error) {
         console.error('Get transactions error:', error);
         res.status(500).json({ success: false, message: 'Server error' });
     }
 });
 
-// Download transactions as PDF
-app.get('/api/transactions/:username/pdf', async (req, res) => {
+app.get('/api/transactions/:email/pdf', async (req, res) => {
     try {
-        const { username } = req.params;
+        const { email } = req.params;
         
-        const userResult = await pool.query(
-            'SELECT id, username, email, phone FROM users WHERE LOWER(username) = LOWER($1)',
-            [username]
-        );
-        
+        const userResult = await pool.query('SELECT id, email FROM users WHERE LOWER(email) = LOWER($1)', [email]);
         if (userResult.rows.length === 0) {
             return res.status(404).json({ success: false, message: 'User not found' });
         }
         
-        const user = userResult.rows[0];
-        
-        const transactions = await pool.query(
-            `SELECT type, amount, fee, bonus, status, phone, reference, created_at 
+        const transResult = await pool.query(
+            `SELECT type, amount, status, phone, created_at
              FROM transactions WHERE user_id = $1 ORDER BY created_at DESC`,
-            [user.id]
+            [userResult.rows[0].id]
         );
         
-        // Create PDF
-        const doc = new PDFDocument({ margin: 50 });
-        
+        const doc = new PDFDocument();
         res.setHeader('Content-Type', 'application/pdf');
-        res.setHeader('Content-Disposition', `attachment; filename=transactions_${username}_${Date.now()}.pdf`);
+        res.setHeader('Content-Disposition', `attachment; filename=transactions-${email}.pdf`);
         
         doc.pipe(res);
         
-        // Header
         doc.fontSize(20).text('Airtime Solution Kenya', { align: 'center' });
         doc.fontSize(12).text('Transaction History', { align: 'center' });
         doc.moveDown();
-        
-        // User info
-        doc.fontSize(10);
-        doc.text(`Username: ${user.username}`);
-        doc.text(`Email: ${user.email}`);
-        doc.text(`Phone: ${user.phone}`);
+        doc.fontSize(10).text(`Email: ${email}`);
         doc.text(`Generated: ${new Date().toLocaleString()}`);
         doc.moveDown();
         
-        // Transactions table
-        doc.fontSize(9);
-        const tableTop = doc.y;
-        const headers = ['Date', 'Type', 'Amount', 'Status', 'Phone', 'Reference'];
-        const colWidths = [80, 60, 60, 60, 90, 130];
-        
-        let x = 50;
-        headers.forEach((header, i) => {
-            doc.text(header, x, tableTop, { width: colWidths[i], align: 'left' });
-            x += colWidths[i];
+        doc.fontSize(10);
+        transResult.rows.forEach((tx, index) => {
+            doc.text(`${index + 1}. ${tx.type.toUpperCase()} - KES ${tx.amount} - ${tx.status} - ${new Date(tx.created_at).toLocaleDateString()}`);
         });
-        
-        doc.moveTo(50, tableTop + 15).lineTo(530, tableTop + 15).stroke();
-        
-        let y = tableTop + 20;
-        transactions.rows.forEach((t, index) => {
-            if (y > 700) {
-                doc.addPage();
-                y = 50;
-            }
-            
-            x = 50;
-            doc.text(new Date(t.created_at).toLocaleDateString(), x, y, { width: colWidths[0] });
-            x += colWidths[0];
-            doc.text(t.type, x, y, { width: colWidths[1] });
-            x += colWidths[1];
-            doc.text(`KES ${t.amount}`, x, y, { width: colWidths[2] });
-            x += colWidths[2];
-            doc.text(t.status, x, y, { width: colWidths[3] });
-            x += colWidths[3];
-            doc.text(t.phone || '-', x, y, { width: colWidths[4] });
-            x += colWidths[4];
-            doc.text(t.reference || '-', x, y, { width: colWidths[5] });
-            
-            y += 15;
-        });
-        
-        // Footer
-        doc.moveDown(2);
-        doc.fontSize(8).text('This document is auto-generated. For queries, contact support.', { align: 'center' });
         
         doc.end();
     } catch (error) {
@@ -928,49 +710,40 @@ app.get('/api/transactions/:username/pdf', async (req, res) => {
     }
 });
 
-// ===================== NOTIFICATION ROUTES =====================
-
-// Get user notifications
-app.get('/api/notifications/:username', async (req, res) => {
+app.get('/api/notifications/:email', async (req, res) => {
     try {
-        const { username } = req.params;
+        const { email } = req.params;
         
-        const userResult = await pool.query('SELECT id FROM users WHERE LOWER(username) = LOWER($1)', [username]);
+        const userResult = await pool.query('SELECT id FROM users WHERE LOWER(email) = LOWER($1)', [email]);
         if (userResult.rows.length === 0) {
             return res.status(404).json({ success: false, message: 'User not found' });
         }
         
-        const userId = userResult.rows[0].id;
-        
-        const notifications = await pool.query(
+        const result = await pool.query(
             `SELECT id, title, message, is_read, created_at FROM notifications 
-             WHERE (user_id = $1 OR scope = 'system') 
-             ORDER BY created_at DESC LIMIT 20`,
-            [userId]
+             WHERE user_id = $1 OR scope = 'system'
+             ORDER BY created_at DESC LIMIT 50`,
+            [userResult.rows[0].id]
         );
         
-        res.json({ success: true, notifications: notifications.rows });
+        res.json({ success: true, notifications: result.rows });
     } catch (error) {
         console.error('Get notifications error:', error);
         res.status(500).json({ success: false, message: 'Server error' });
     }
 });
 
-// Mark notification as read
 app.put('/api/notifications/:id/read', async (req, res) => {
     try {
         const { id } = req.params;
         await pool.query('UPDATE notifications SET is_read = true WHERE id = $1', [id]);
         res.json({ success: true });
     } catch (error) {
-        console.error('Mark read error:', error);
+        console.error('Mark notification read error:', error);
         res.status(500).json({ success: false, message: 'Server error' });
     }
 });
 
-// ===================== ADMIN ROUTES =====================
-
-// Admin login
 app.post('/api/admin/login', adminLoginLimiter, (req, res) => {
     const { password } = req.body;
     
@@ -987,7 +760,6 @@ app.post('/api/admin/login', adminLoginLimiter, (req, res) => {
     }
 });
 
-// Admin auth middleware
 function adminAuth(req, res, next) {
     if (req.session && req.session.isAdmin) {
         next();
@@ -996,11 +768,10 @@ function adminAuth(req, res, next) {
     }
 }
 
-// Get all users (admin)
 app.get('/api/admin/users', adminAuth, async (req, res) => {
     try {
         const result = await pool.query(
-            `SELECT id, username, email, phone, balance, bonus_balance, is_disabled, created_at, last_login_at 
+            `SELECT id, email, balance, bonus_balance, is_disabled, created_at, last_login_at 
              FROM users ORDER BY created_at DESC`
         );
         res.json({ success: true, users: result.rows });
@@ -1010,13 +781,11 @@ app.get('/api/admin/users', adminAuth, async (req, res) => {
     }
 });
 
-// Toggle user status (admin)
 app.put('/api/admin/users/:id/toggle', adminAuth, async (req, res) => {
     try {
         const { id } = req.params;
         await pool.query('UPDATE users SET is_disabled = NOT is_disabled WHERE id = $1', [id]);
         
-        // Log action
         await pool.query(
             `INSERT INTO admin_audit_logs (id, admin_identifier, action, target_user, created_at)
              VALUES ($1, 'admin', 'toggle_user_status', $2, NOW())`,
@@ -1030,11 +799,10 @@ app.put('/api/admin/users/:id/toggle', adminAuth, async (req, res) => {
     }
 });
 
-// Adjust user balance (admin)
 app.put('/api/admin/users/:id/balance', adminAuth, async (req, res) => {
     try {
         const { id } = req.params;
-        const { amount, type } = req.body; // type: 'add' or 'deduct'
+        const { amount, type } = req.body;
         
         if (type === 'add') {
             await pool.query('UPDATE users SET balance = balance + $1 WHERE id = $2', [Math.abs(amount), id]);
@@ -1042,14 +810,12 @@ app.put('/api/admin/users/:id/balance', adminAuth, async (req, res) => {
             await pool.query('UPDATE users SET balance = GREATEST(0, balance - $1) WHERE id = $2', [Math.abs(amount), id]);
         }
         
-        // Create transaction record
         await pool.query(
             `INSERT INTO transactions (id, user_id, type, amount, status, external_provider, reference, created_at)
              VALUES ($1, $2, 'adjustment', $3, 'completed', 'manual', $4, NOW())`,
             [uuidv4(), id, type === 'add' ? amount : -amount, `ADJ-${Date.now()}`]
         );
         
-        // Log action
         await pool.query(
             `INSERT INTO admin_audit_logs (id, admin_identifier, action, target_user, metadata, created_at)
              VALUES ($1, 'admin', 'balance_adjustment', $2, $3, NOW())`,
@@ -1063,11 +829,10 @@ app.put('/api/admin/users/:id/balance', adminAuth, async (req, res) => {
     }
 });
 
-// Get all transactions (admin)
 app.get('/api/admin/transactions', adminAuth, async (req, res) => {
     try {
         const result = await pool.query(
-            `SELECT t.id, t.type, t.amount, t.fee, t.status, t.phone, t.reference, t.created_at, u.username
+            `SELECT t.id, t.type, t.amount, t.fee, t.status, t.phone, t.reference, t.created_at, u.email
              FROM transactions t 
              LEFT JOIN users u ON t.user_id = u.id 
              ORDER BY t.created_at DESC LIMIT 500`
@@ -1079,11 +844,10 @@ app.get('/api/admin/transactions', adminAuth, async (req, res) => {
     }
 });
 
-// Get deposit verifications (admin)
 app.get('/api/admin/verifications', adminAuth, async (req, res) => {
     try {
         const result = await pool.query(
-            `SELECT dv.id, dv.mpesa_code, dv.amount_claimed, dv.status, dv.submitted_at, u.username
+            `SELECT dv.id, dv.mpesa_code, dv.amount_claimed, dv.status, dv.submitted_at, u.email
              FROM deposit_verifications dv
              LEFT JOIN users u ON dv.user_id = u.id
              ORDER BY dv.submitted_at DESC`
@@ -1095,11 +859,10 @@ app.get('/api/admin/verifications', adminAuth, async (req, res) => {
     }
 });
 
-// Process verification (admin)
 app.put('/api/admin/verifications/:id', adminAuth, async (req, res) => {
     try {
         const { id } = req.params;
-        const { status, amount } = req.body; // status: 'validated' or 'rejected'
+        const { status, amount } = req.body;
         
         const verificationResult = await pool.query(
             'SELECT user_id, amount_claimed FROM deposit_verifications WHERE id = $1',
@@ -1118,10 +881,8 @@ app.put('/api/admin/verifications/:id', adminAuth, async (req, res) => {
         );
         
         if (status === 'validated' && amount > 0) {
-            // Credit user
             await pool.query('UPDATE users SET balance = balance + $1 WHERE id = $2', [amount, verification.user_id]);
             
-            // Create transaction
             await pool.query(
                 `INSERT INTO transactions (id, user_id, type, amount, status, external_provider, reference, created_at)
                  VALUES ($1, $2, 'deposit', $3, 'completed', 'manual', $4, NOW())`,
@@ -1136,7 +897,6 @@ app.put('/api/admin/verifications/:id', adminAuth, async (req, res) => {
     }
 });
 
-// Set float status (admin)
 app.put('/api/admin/float-status', adminAuth, async (req, res) => {
     try {
         const { isLow } = req.body;
@@ -1154,7 +914,6 @@ app.put('/api/admin/float-status', adminAuth, async (req, res) => {
     }
 });
 
-// Send system notification (admin)
 app.post('/api/admin/notifications', adminAuth, async (req, res) => {
     try {
         const { title, message, userId } = req.body;
@@ -1172,7 +931,6 @@ app.post('/api/admin/notifications', adminAuth, async (req, res) => {
     }
 });
 
-// Get dashboard stats (admin)
 app.get('/api/admin/stats', adminAuth, async (req, res) => {
     try {
         const users = await pool.query('SELECT COUNT(*) FROM users');
@@ -1195,16 +953,12 @@ app.get('/api/admin/stats', adminAuth, async (req, res) => {
     }
 });
 
-// Admin logout
 app.post('/api/admin/logout', (req, res) => {
     req.session.destroy();
     res.json({ success: true, message: 'Logged out' });
 });
 
-// ===================== AIRTIME TO CASH (Coming Soon) =====================
-
 app.post('/api/airtime-to-cash/initiate', async (req, res) => {
-    // Feature coming soon
     res.status(503).json({ 
         success: false, 
         message: 'Airtime to Cash feature coming soon!',
@@ -1212,15 +966,10 @@ app.post('/api/airtime-to-cash/initiate', async (req, res) => {
     });
 });
 
-// ===================== HEALTH CHECK =====================
-
 app.get('/api/health', (req, res) => {
     res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
 
-// ===================== STATIC FILES =====================
-
-// Serve static files
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
@@ -1233,15 +982,12 @@ app.get('/admin', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'admin.html'));
 });
 
-// ===================== START SERVER =====================
-
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`Server running on port ${PORT}`);
     console.log(`Frontend origin: ${process.env.FRONTEND_ORIGIN || 'https://airtimetest.onrender.com'}`);
     console.log(`Callback URL: ${CALLBACK_BASE_URL}`);
 });
 
-// Handle graceful shutdown
 process.on('SIGTERM', () => {
     console.log('SIGTERM received, shutting down gracefully');
     pool.end(() => {
