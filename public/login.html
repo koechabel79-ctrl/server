@@ -1,0 +1,757 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Airtime Solution Kenya 🇰🇪</title>
+    <link rel="manifest" href="/manifest.json">
+    <link rel="icon" type="image/png" href="/airtime-logo.png">
+    <link rel="apple-touch-icon" href="/airtime-logo.png">
+    <meta name="theme-color" content="#1a5f2a">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Poppins', sans-serif;
+            background: linear-gradient(135deg, #1a5f2a 0%, #0d3d18 50%, #051a08 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .auth-container {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 24px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+            max-width: 450px;
+            width: 100%;
+            animation: slideUp 0.6s ease-out;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .auth-header {
+            background: linear-gradient(135deg, #1a5f2a, #2d8b42);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .auth-header img {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: white;
+            padding: 10px;
+            margin-bottom: 15px;
+        }
+
+        .auth-header h1 {
+            font-size: 1.6rem;
+            margin-bottom: 5px;
+        }
+
+        .auth-header p {
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+
+        .auth-tabs {
+            display: flex;
+            background: #f5f5f5;
+        }
+
+        .auth-tab {
+            flex: 1;
+            padding: 15px;
+            text-align: center;
+            cursor: pointer;
+            font-weight: 500;
+            color: #666;
+            border: none;
+            background: transparent;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .auth-tab.active {
+            color: #1a5f2a;
+            background: white;
+        }
+
+        .auth-tab.active::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 3px;
+            background: #f4a020;
+        }
+
+        .auth-content {
+            padding: 30px;
+        }
+
+        .auth-form {
+            display: none;
+        }
+
+        .auth-form.active {
+            display: block;
+            animation: fadeIn 0.4s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: #333;
+            font-size: 0.9rem;
+        }
+
+        .form-group label i {
+            margin-right: 8px;
+            color: #1a5f2a;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 14px 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 12px;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+            font-family: inherit;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: #1a5f2a;
+            box-shadow: 0 0 0 3px rgba(26, 95, 42, 0.1);
+        }
+
+        .form-input.error {
+            border-color: #dc3545;
+        }
+
+        .phone-input-wrapper {
+            display: flex;
+            align-items: center;
+        }
+
+        .phone-prefix {
+            background: #f5f5f5;
+            padding: 14px 12px;
+            border: 2px solid #e0e0e0;
+            border-right: none;
+            border-radius: 12px 0 0 12px;
+            font-weight: 500;
+            color: #333;
+        }
+
+        .phone-input-wrapper .form-input {
+            border-radius: 0 12px 12px 0;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 15px;
+            border: none;
+            border-radius: 12px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-family: inherit;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #1a5f2a, #2d8b42);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(26, 95, 42, 0.3);
+        }
+
+        .btn-primary:active {
+            transform: translateY(0);
+        }
+
+        .btn-secondary {
+            background: #f5f5f5;
+            color: #333;
+            margin-top: 10px;
+        }
+
+        .btn-secondary:hover {
+            background: #e0e0e0;
+        }
+
+        .btn:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+        }
+
+        .btn .spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid transparent;
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .divider {
+            display: flex;
+            align-items: center;
+            margin: 20px 0;
+        }
+
+        .divider::before,
+        .divider::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: #e0e0e0;
+        }
+
+        .divider span {
+            padding: 0 15px;
+            color: #999;
+            font-size: 0.85rem;
+        }
+
+        .forgot-password {
+            text-align: right;
+            margin-top: -10px;
+            margin-bottom: 20px;
+        }
+
+        .forgot-password a {
+            color: #1a5f2a;
+            text-decoration: none;
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+
+        .forgot-password a:hover {
+            text-decoration: underline;
+        }
+
+        .alert {
+            padding: 12px 16px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 0.9rem;
+            animation: slideDown 0.3s ease;
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .alert-error {
+            background: #ffe3e3;
+            color: #dc3545;
+            border: 1px solid #ffb3b3;
+        }
+
+        .alert-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .alert-info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+
+        .password-toggle {
+            position: relative;
+        }
+
+        .password-toggle .form-input {
+            padding-right: 45px;
+        }
+
+        .password-toggle .toggle-btn {
+            position: absolute;
+            right: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: #666;
+        }
+
+        .footer-text {
+            text-align: center;
+            margin-top: 20px;
+            font-size: 0.85rem;
+            color: #666;
+        }
+
+        .footer-text a {
+            color: #1a5f2a;
+            font-weight: 600;
+            text-decoration: none;
+        }
+
+        .footer-text a:hover {
+            text-decoration: underline;
+        }
+
+        .kenya-flag {
+            display: inline-flex;
+            gap: 2px;
+            margin-left: 5px;
+        }
+
+        .kenya-flag span {
+            display: inline-block;
+            width: 8px;
+            height: 20px;
+        }
+
+        .kenya-flag .black { background: #000; }
+        .kenya-flag .red { background: #bb0a21; }
+        .kenya-flag .green { background: #1a5f2a; }
+
+        @media (max-width: 480px) {
+            .auth-container {
+                margin: 10px;
+            }
+
+            .auth-header {
+                padding: 20px;
+            }
+
+            .auth-content {
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="auth-container">
+        <div class="auth-header">
+            <img src="https://via.placeholder.com/80x80/1a5f2a/ffffff?text=ASK" alt="Airtime Solution Kenya" id="logoImg">
+            <h1>Airtime Solution Kenya <span class="kenya-flag"><span class="black"></span><span class="red"></span><span class="green"></span></span></h1>
+            <p>Buy & Resell Airtime Instantly</p>
+        </div>
+
+        <div class="auth-tabs">
+            <button class="auth-tab active" data-tab="login">
+                <i class="fas fa-sign-in-alt"></i> Login
+            </button>
+            <button class="auth-tab" data-tab="signup">
+                <i class="fas fa-user-plus"></i> Sign Up
+            </button>
+            <button class="auth-tab" data-tab="forgot">
+                <i class="fas fa-key"></i> Reset
+            </button>
+        </div>
+
+        <div class="auth-content">
+            <div id="alertBox"></div>
+
+            <form id="loginForm" class="auth-form active">
+                <div class="form-group">
+                    <label><i class="fas fa-envelope"></i> Email Address</label>
+                    <input type="email" class="form-input" id="loginEmail" placeholder="Enter your email" required>
+                </div>
+
+                <div class="form-group">
+                    <label><i class="fas fa-lock"></i> Password</label>
+                    <div class="password-toggle">
+                        <input type="password" class="form-input" id="loginPassword" placeholder="Enter your password" required>
+                        <button type="button" class="toggle-btn" onclick="togglePassword('loginPassword', this)">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="forgot-password">
+                    <a href="#" onclick="switchTab('forgot')">Forgot password?</a>
+                </div>
+
+                <button type="submit" class="btn btn-primary" id="loginBtn">
+                    <i class="fas fa-sign-in-alt"></i> Login
+                </button>
+
+                <div class="footer-text">
+                    Don't have an account? <a href="#" onclick="switchTab('signup')">Sign up</a>
+                </div>
+            </form>
+
+            <form id="signupForm" class="auth-form">
+                <div class="form-group">
+                    <label><i class="fas fa-user"></i> Username *</label>
+                    <input type="text" class="form-input" id="signupUsername" placeholder="Choose a unique username" required>
+                </div>
+
+                <div class="form-group">
+                    <label><i class="fas fa-envelope"></i> Email Address *</label>
+                    <input type="email" class="form-input" id="signupEmail" placeholder="Enter your email" required>
+                </div>
+
+                <div class="form-group">
+                    <label><i class="fas fa-phone"></i> Phone Number *</label>
+                    <div class="phone-input-wrapper">
+                        <span class="phone-prefix">+254</span>
+                        <input type="tel" class="form-input" id="signupPhone" placeholder="7XXXXXXXX" maxlength="9" required>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label><i class="fas fa-lock"></i> Password *</label>
+                    <div class="password-toggle">
+                        <input type="password" class="form-input" id="signupPassword" placeholder="Min 6 characters" required minlength="6">
+                        <button type="button" class="toggle-btn" onclick="togglePassword('signupPassword', this)">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label><i class="fas fa-lock"></i> Confirm Password *</label>
+                    <div class="password-toggle">
+                        <input type="password" class="form-input" id="signupConfirmPassword" placeholder="Confirm your password" required>
+                        <button type="button" class="toggle-btn" onclick="togglePassword('signupConfirmPassword', this)">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-primary" id="signupBtn">
+                    <i class="fas fa-user-plus"></i> Create Account
+                </button>
+
+                <div class="footer-text">
+                    Already have an account? <a href="#" onclick="switchTab('login')">Login</a>
+                </div>
+            </form>
+
+            <form id="forgotForm" class="auth-form">
+                <p style="margin-bottom: 20px; color: #666; font-size: 0.9rem;">
+                    Enter your email address and we'll send you a link to reset your password.
+                </p>
+
+                <div class="form-group">
+                    <label><i class="fas fa-envelope"></i> Email Address</label>
+                    <input type="email" class="form-input" id="forgotEmail" placeholder="Enter your registered email" required>
+                </div>
+
+                <button type="submit" class="btn btn-primary" id="forgotBtn">
+                    <i class="fas fa-paper-plane"></i> Send Reset Link
+                </button>
+
+                <div class="footer-text">
+                    Remember your password? <a href="#" onclick="switchTab('login')">Login</a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js';
+        import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-auth.js';
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyBtx-D3nbl1lKOhCzEixDZRgRDM4NbtOBE",
+            authDomain: "swiftauth-5fcb5.firebaseapp.com",
+            projectId: "swiftauth-5fcb5",
+            storageBucket: "swiftauth-5fcb5.firebasestorage.app",
+            messagingSenderId: "990160652137",
+            appId: "1:990160652137:web:abac238567edfdb5671ff8",
+            measurementId: "G-5C1DS28B5S"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+
+        const API_BASE = window.location.origin;
+
+        window.togglePassword = function(inputId, btn) {
+            const input = document.getElementById(inputId);
+            const icon = btn.querySelector('i');
+            if (input.type === 'password') {
+                input.type = 'text';
+                icon.classList.replace('fa-eye', 'fa-eye-slash');
+            } else {
+                input.type = 'password';
+                icon.classList.replace('fa-eye-slash', 'fa-eye');
+            }
+        };
+
+        window.switchTab = function(tab) {
+            document.querySelectorAll('.auth-tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.auth-form').forEach(f => f.classList.remove('active'));
+            document.querySelector(`[data-tab="${tab}"]`).classList.add('active');
+            document.getElementById(`${tab}Form`).classList.add('active');
+            clearAlert();
+        };
+
+        document.querySelectorAll('.auth-tab').forEach(tab => {
+            tab.addEventListener('click', () => switchTab(tab.dataset.tab));
+        });
+
+        function showAlert(message, type = 'error') {
+            const alertBox = document.getElementById('alertBox');
+            const icon = type === 'error' ? 'fa-exclamation-circle' : type === 'success' ? 'fa-check-circle' : 'fa-info-circle';
+            alertBox.innerHTML = `<div class="alert alert-${type}"><i class="fas ${icon}"></i> ${message}</div>`;
+        }
+
+        function clearAlert() {
+            document.getElementById('alertBox').innerHTML = '';
+        }
+
+        function setLoading(btnId, loading) {
+            const btn = document.getElementById(btnId);
+            if (loading) {
+                btn.disabled = true;
+                btn.innerHTML = '<div class="spinner"></div> Please wait...';
+            } else {
+                btn.disabled = false;
+                const texts = {
+                    loginBtn: '<i class="fas fa-sign-in-alt"></i> Login',
+                    signupBtn: '<i class="fas fa-user-plus"></i> Create Account',
+                    forgotBtn: '<i class="fas fa-paper-plane"></i> Send Reset Link'
+                };
+                btn.innerHTML = texts[btnId];
+            }
+        }
+
+        async function checkUsernameExists(username) {
+            try {
+                const response = await fetch(`${API_BASE}/api/users/check-username/${username}`);
+                const data = await response.json();
+                return data.exists;
+            } catch (error) {
+                return false;
+            }
+        }
+
+        async function checkEmailHasUsername(email) {
+            try {
+                const response = await fetch(`${API_BASE}/api/users/check-email/${email}`);
+                const data = await response.json();
+                return { success: data.exists, user: { username: data.username } };
+            } catch (error) {
+                return { success: false };
+            }
+        }
+
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            clearAlert();
+            setLoading('loginBtn', true);
+
+            const email = document.getElementById('loginEmail').value.trim();
+            const password = document.getElementById('loginPassword').value;
+
+            try {
+                const userCheck = await checkEmailHasUsername(email);
+                if (!userCheck.success) {
+                    showAlert('No account found with this email. Please sign up first.', 'error');
+                    setLoading('loginBtn', false);
+                    return;
+                }
+
+                const userCredential = await signInWithEmailAndPassword(auth, email, password);
+                const user = userCredential.user;
+
+                localStorage.setItem('userEmail', email);
+                localStorage.setItem('username', userCheck.user.username);
+                localStorage.setItem('firebaseUid', user.uid);
+
+                showAlert('Login successful! Redirecting...', 'success');
+                setTimeout(() => {
+                    window.location.href = '/';
+                }, 1000);
+            } catch (error) {
+                console.error('Login error:', error);
+                let message = 'Login failed. Please try again.';
+                if (error.code === 'auth/user-not-found') {
+                    message = 'No account found with this email.';
+                } else if (error.code === 'auth/wrong-password') {
+                    message = 'Incorrect password.';
+                } else if (error.code === 'auth/invalid-email') {
+                    message = 'Invalid email address.';
+                } else if (error.code === 'auth/too-many-requests') {
+                    message = 'Too many attempts. Please try again later.';
+                }
+                showAlert(message, 'error');
+            }
+            setLoading('loginBtn', false);
+        });
+
+        document.getElementById('signupForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            clearAlert();
+            setLoading('signupBtn', true);
+
+            const username = document.getElementById('signupUsername').value.trim();
+            const email = document.getElementById('signupEmail').value.trim();
+            const phone = '254' + document.getElementById('signupPhone').value.trim();
+            const password = document.getElementById('signupPassword').value;
+            const confirmPassword = document.getElementById('signupConfirmPassword').value;
+
+            if (password !== confirmPassword) {
+                showAlert('Passwords do not match.', 'error');
+                setLoading('signupBtn', false);
+                return;
+            }
+
+            if (username.length < 3) {
+                showAlert('Username must be at least 3 characters.', 'error');
+                setLoading('signupBtn', false);
+                return;
+            }
+
+            if (!/^[a-zA-Z0-9_]+$/.test(username)) {
+                showAlert('Username can only contain letters, numbers, and underscores.', 'error');
+                setLoading('signupBtn', false);
+                return;
+            }
+
+            try {
+                const usernameExists = await checkUsernameExists(username);
+                if (usernameExists) {
+                    showAlert('Username is already taken. Please choose another.', 'error');
+                    setLoading('signupBtn', false);
+                    return;
+                }
+
+                const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+                const user = userCredential.user;
+
+                const response = await fetch(`${API_BASE}/api/users/register`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        username,
+                        email,
+                        phone: phone,
+                        firebase_uid: user.uid
+                    })
+                });
+
+                const data = await response.json();
+
+                if (!data.success) {
+                    showAlert(data.message || 'Registration failed.', 'error');
+                    setLoading('signupBtn', false);
+                    return;
+                }
+
+                localStorage.setItem('userEmail', email);
+                localStorage.setItem('username', username);
+                localStorage.setItem('firebaseUid', user.uid);
+
+                showAlert('Account created successfully! Redirecting...', 'success');
+                setTimeout(() => {
+                    window.location.href = '/';
+                }, 1500);
+            } catch (error) {
+                console.error('Signup error:', error);
+                let message = 'Registration failed. Please try again.';
+                if (error.code === 'auth/email-already-in-use') {
+                    message = 'Email is already registered.';
+                } else if (error.code === 'auth/invalid-email') {
+                    message = 'Invalid email address.';
+                } else if (error.code === 'auth/weak-password') {
+                    message = 'Password is too weak. Use at least 6 characters.';
+                }
+                showAlert(message, 'error');
+            }
+            setLoading('signupBtn', false);
+        });
+
+        document.getElementById('forgotForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            clearAlert();
+            setLoading('forgotBtn', true);
+
+            const email = document.getElementById('forgotEmail').value.trim();
+
+            try {
+                const userCheck = await checkEmailHasUsername(email);
+                if (!userCheck.success) {
+                    showAlert('No account found with this email address.', 'error');
+                    setLoading('forgotBtn', false);
+                    return;
+                }
+
+                await sendPasswordResetEmail(auth, email);
+                showAlert('Password reset link sent! Check your email inbox.', 'success');
+            } catch (error) {
+                console.error('Password reset error:', error);
+                let message = 'Failed to send reset link. Please try again.';
+                if (error.code === 'auth/user-not-found') {
+                    message = 'No account found with this email.';
+                }
+                showAlert(message, 'error');
+            }
+            setLoading('forgotBtn', false);
+        });
+
+        onAuthStateChanged(auth, (user) => {
+            if (user && localStorage.getItem('username')) {
+                window.location.href = '/';
+            }
+        });
+    </script>
+</body>
+</html>
