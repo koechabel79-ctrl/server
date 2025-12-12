@@ -34,14 +34,43 @@ pool.connect((err, client, release) => {
 
 // Middleware
 app.use(helmet({ contentSecurityPolicy: false }));
+
+// CORS - Allow your static frontend site
+const allowedOrigins = [
+    'https://airtimetest.onrender.com',
+    'https://airtimekenya.onrender.com',  // Replace with your actual static site URL
+    process.env.FRONTEND_ORIGIN
+].filter(Boolean);
+
 app.use(cors({
-    origin: process.env.FRONTEND_ORIGIN || 'https://airtimetest.onrender.com',
+    origin: function(origin, callback) {
+        // Allow requests with no origin (mobile apps, curl, etc)
+        if (!origin) return callback(null, true);
+        if (allowedOrigins.includes(origin)) {
+            return callback(null, true);
+        }
+        return callback(null, false);
+    },
     credentials: true
 }));
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
-app.use(express.static(path.join(__dirname, 'public')));
+
+// Root route - API info (no static files needed since frontend is separate)
+app.get('/', (req, res) => {
+    res.json({
+        name: 'Airtime Solution Kenya API',
+        status: 'running',
+        version: '1.0',
+        endpoints: {
+            users: '/api/users',
+            payments: '/api/payments',
+            transactions: '/api/transactions'
+        }
+    });
+});
 
 // Session configuration
 app.use(session({
