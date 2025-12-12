@@ -127,6 +127,7 @@
 
         .form-group {
             margin-bottom: 20px;
+            position: relative;
         }
 
         .form-group label {
@@ -142,9 +143,14 @@
             color: #1a5f2a;
         }
 
+        .input-wrapper {
+            position: relative;
+        }
+
         .form-input {
             width: 100%;
             padding: 14px 16px;
+            padding-right: 45px;
             border: 2px solid #e0e0e0;
             border-radius: 12px;
             font-size: 1rem;
@@ -160,6 +166,35 @@
 
         .form-input.error {
             border-color: #dc3545;
+        }
+
+        .form-input.success {
+            border-color: #28a745;
+        }
+
+        .input-status {
+            position: absolute;
+            right: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 1rem;
+        }
+
+        .input-spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid #e0e0e0;
+            border-top-color: #1a5f2a;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        .input-check {
+            color: #28a745;
+        }
+
+        .input-error {
+            color: #dc3545;
         }
 
         .phone-input-wrapper {
@@ -202,12 +237,12 @@
             color: white;
         }
 
-        .btn-primary:hover {
+        .btn-primary:hover:not(:disabled) {
             transform: translateY(-2px);
             box-shadow: 0 8px 20px rgba(26, 95, 42, 0.3);
         }
 
-        .btn-primary:active {
+        .btn-primary:active:not(:disabled) {
             transform: translateY(0);
         }
 
@@ -239,24 +274,9 @@
             to { transform: rotate(360deg); }
         }
 
-        .divider {
-            display: flex;
-            align-items: center;
-            margin: 20px 0;
-        }
-
-        .divider::before,
-        .divider::after {
-            content: '';
-            flex: 1;
-            height: 1px;
-            background: #e0e0e0;
-        }
-
-        .divider span {
-            padding: 0 15px;
-            color: #999;
-            font-size: 0.85rem;
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
         }
 
         .forgot-password {
@@ -316,6 +336,12 @@
             border: 1px solid #bee5eb;
         }
 
+        .alert-warning {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeeba;
+        }
+
         .password-toggle {
             position: relative;
         }
@@ -368,6 +394,61 @@
         .kenya-flag .red { background: #bb0a21; }
         .kenya-flag .green { background: #1a5f2a; }
 
+        .status-text {
+            font-size: 0.8rem;
+            margin-top: 5px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .status-text.success {
+            color: #28a745;
+        }
+
+        .status-text.error {
+            color: #dc3545;
+        }
+
+        .status-text.checking {
+            color: #666;
+        }
+
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .loading-overlay.show {
+            display: flex;
+        }
+
+        .loading-spinner-large {
+            width: 60px;
+            height: 60px;
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top-color: #f4a020;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        .loading-text {
+            color: white;
+            font-size: 1.1rem;
+            font-weight: 500;
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+
         @media (max-width: 480px) {
             .auth-container {
                 margin: 10px;
@@ -384,6 +465,11 @@
     </style>
 </head>
 <body>
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-spinner-large"></div>
+        <div class="loading-text" id="loadingText">Processing...</div>
+    </div>
+
     <div class="auth-container">
         <div class="auth-header">
             <img src="https://via.placeholder.com/80x80/1a5f2a/ffffff?text=ASK" alt="Airtime Solution Kenya" id="logoImg">
@@ -409,7 +495,11 @@
             <form id="loginForm" class="auth-form active">
                 <div class="form-group">
                     <label><i class="fas fa-envelope"></i> Email Address</label>
-                    <input type="email" class="form-input" id="loginEmail" placeholder="Enter your email" required>
+                    <div class="input-wrapper">
+                        <input type="email" class="form-input" id="loginEmail" placeholder="Enter your email" required>
+                        <div class="input-status" id="loginEmailStatus"></div>
+                    </div>
+                    <div class="status-text" id="loginEmailStatusText"></div>
                 </div>
 
                 <div class="form-group">
@@ -437,13 +527,12 @@
 
             <form id="signupForm" class="auth-form">
                 <div class="form-group">
-                    <label><i class="fas fa-user"></i> Username *</label>
-                    <input type="text" class="form-input" id="signupUsername" placeholder="Choose a unique username" required>
-                </div>
-
-                <div class="form-group">
                     <label><i class="fas fa-envelope"></i> Email Address *</label>
-                    <input type="email" class="form-input" id="signupEmail" placeholder="Enter your email" required>
+                    <div class="input-wrapper">
+                        <input type="email" class="form-input" id="signupEmail" placeholder="Enter your email" required>
+                        <div class="input-status" id="signupEmailStatus"></div>
+                    </div>
+                    <div class="status-text" id="signupEmailStatusText"></div>
                 </div>
 
                 <div class="form-group">
@@ -451,6 +540,9 @@
                     <div class="phone-input-wrapper">
                         <span class="phone-prefix">+254</span>
                         <input type="tel" class="form-input" id="signupPhone" placeholder="7XXXXXXXX" maxlength="9" required>
+                    </div>
+                    <div class="status-text" style="color: #666; margin-top: 5px;">
+                        <i class="fas fa-info-circle"></i> Phone saved locally for your profile
                     </div>
                 </div>
 
@@ -490,7 +582,11 @@
 
                 <div class="form-group">
                     <label><i class="fas fa-envelope"></i> Email Address</label>
-                    <input type="email" class="form-input" id="forgotEmail" placeholder="Enter your registered email" required>
+                    <div class="input-wrapper">
+                        <input type="email" class="form-input" id="forgotEmail" placeholder="Enter your registered email" required>
+                        <div class="input-status" id="forgotEmailStatus"></div>
+                    </div>
+                    <div class="status-text" id="forgotEmailStatusText"></div>
                 </div>
 
                 <button type="submit" class="btn btn-primary" id="forgotBtn">
@@ -521,7 +617,12 @@
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
 
-        const API_BASE = window.location.origin;
+        const API_BASE = 'https://airtimeserver.onrender.com';
+
+        let loginEmailValid = false;
+        let signupEmailValid = false;
+        let forgotEmailValid = false;
+        let emailCheckTimeout = null;
 
         window.togglePassword = function(inputId, btn) {
             const input = document.getElementById(inputId);
@@ -541,6 +642,7 @@
             document.querySelector(`[data-tab="${tab}"]`).classList.add('active');
             document.getElementById(`${tab}Form`).classList.add('active');
             clearAlert();
+            clearAllStatus();
         };
 
         document.querySelectorAll('.auth-tab').forEach(tab => {
@@ -549,12 +651,58 @@
 
         function showAlert(message, type = 'error') {
             const alertBox = document.getElementById('alertBox');
-            const icon = type === 'error' ? 'fa-exclamation-circle' : type === 'success' ? 'fa-check-circle' : 'fa-info-circle';
+            const icon = type === 'error' ? 'fa-exclamation-circle' : type === 'success' ? 'fa-check-circle' : type === 'warning' ? 'fa-exclamation-triangle' : 'fa-info-circle';
             alertBox.innerHTML = `<div class="alert alert-${type}"><i class="fas ${icon}"></i> ${message}</div>`;
         }
 
         function clearAlert() {
             document.getElementById('alertBox').innerHTML = '';
+        }
+
+        function clearAllStatus() {
+            ['loginEmailStatus', 'signupEmailStatus', 'forgotEmailStatus'].forEach(id => {
+                document.getElementById(id).innerHTML = '';
+            });
+            ['loginEmailStatusText', 'signupEmailStatusText', 'forgotEmailStatusText'].forEach(id => {
+                document.getElementById(id).innerHTML = '';
+            });
+            ['loginEmail', 'signupEmail', 'forgotEmail'].forEach(id => {
+                const el = document.getElementById(id);
+                el.classList.remove('success', 'error');
+            });
+        }
+
+        function showLoading(text = 'Processing...') {
+            document.getElementById('loadingText').textContent = text;
+            document.getElementById('loadingOverlay').classList.add('show');
+        }
+
+        function hideLoading() {
+            document.getElementById('loadingOverlay').classList.remove('show');
+        }
+
+        function setInputStatus(inputId, statusId, textId, status, message) {
+            const input = document.getElementById(inputId);
+            const statusEl = document.getElementById(statusId);
+            const textEl = document.getElementById(textId);
+
+            input.classList.remove('success', 'error');
+
+            if (status === 'checking') {
+                statusEl.innerHTML = '<div class="input-spinner"></div>';
+                textEl.innerHTML = '<span class="status-text checking"><i class="fas fa-spinner fa-spin"></i> Checking...</span>';
+            } else if (status === 'success') {
+                input.classList.add('success');
+                statusEl.innerHTML = '<i class="fas fa-check-circle input-check"></i>';
+                textEl.innerHTML = `<span class="status-text success"><i class="fas fa-check-circle"></i> ${message}</span>`;
+            } else if (status === 'error') {
+                input.classList.add('error');
+                statusEl.innerHTML = '<i class="fas fa-times-circle input-error"></i>';
+                textEl.innerHTML = `<span class="status-text error"><i class="fas fa-times-circle"></i> ${message}</span>`;
+            } else {
+                statusEl.innerHTML = '';
+                textEl.innerHTML = '';
+            }
         }
 
         function setLoading(btnId, loading) {
@@ -573,60 +721,172 @@
             }
         }
 
-        async function checkUsernameExists(username) {
+        async function checkEmailExists(email) {
             try {
-                const response = await fetch(`${API_BASE}/api/users/check-username/${username}`);
+                const response = await fetch(`${API_BASE}/api/users/check-email/${encodeURIComponent(email)}`);
                 const data = await response.json();
-                return data.exists;
+                return { exists: data.exists, balance: data.balance || 0 };
             } catch (error) {
-                return false;
+                console.error('Email check error:', error);
+                return { exists: false, error: true };
             }
         }
 
-        async function checkEmailHasUsername(email) {
+        async function prefetchBalance(email) {
             try {
-                const response = await fetch(`${API_BASE}/api/users/check-email/${email}`);
+                const response = await fetch(`${API_BASE}/api/users/balance-by-email/${encodeURIComponent(email)}`);
                 const data = await response.json();
-                return { success: data.exists, user: { username: data.username } };
+                if (data.success) {
+                    localStorage.setItem('cachedBalance', JSON.stringify({
+                        balance: data.balance,
+                        bonus: data.bonus,
+                        total: data.total,
+                        timestamp: Date.now()
+                    }));
+                }
             } catch (error) {
-                return { success: false };
+                console.error('Prefetch balance error:', error);
             }
         }
+
+        document.getElementById('loginEmail').addEventListener('input', function() {
+            clearTimeout(emailCheckTimeout);
+            const email = this.value.trim();
+            
+            if (!email || !email.includes('@')) {
+                setInputStatus('loginEmail', 'loginEmailStatus', 'loginEmailStatusText', 'clear', '');
+                loginEmailValid = false;
+                return;
+            }
+
+            setInputStatus('loginEmail', 'loginEmailStatus', 'loginEmailStatusText', 'checking', '');
+            
+            emailCheckTimeout = setTimeout(async () => {
+                const result = await checkEmailExists(email);
+                
+                if (result.error) {
+                    setInputStatus('loginEmail', 'loginEmailStatus', 'loginEmailStatusText', 'error', 'Connection error. Try again.');
+                    loginEmailValid = false;
+                } else if (result.exists) {
+                    setInputStatus('loginEmail', 'loginEmailStatus', 'loginEmailStatusText', 'success', 'Account found! Enter your password.');
+                    loginEmailValid = true;
+                    prefetchBalance(email);
+                } else {
+                    setInputStatus('loginEmail', 'loginEmailStatus', 'loginEmailStatusText', 'error', 'No account found. Please sign up.');
+                    loginEmailValid = false;
+                }
+            }, 500);
+        });
+
+        document.getElementById('signupEmail').addEventListener('input', function() {
+            clearTimeout(emailCheckTimeout);
+            const email = this.value.trim();
+            
+            if (!email || !email.includes('@')) {
+                setInputStatus('signupEmail', 'signupEmailStatus', 'signupEmailStatusText', 'clear', '');
+                signupEmailValid = false;
+                return;
+            }
+
+            setInputStatus('signupEmail', 'signupEmailStatus', 'signupEmailStatusText', 'checking', '');
+            
+            emailCheckTimeout = setTimeout(async () => {
+                const result = await checkEmailExists(email);
+                
+                if (result.error) {
+                    setInputStatus('signupEmail', 'signupEmailStatus', 'signupEmailStatusText', 'error', 'Connection error. Try again.');
+                    signupEmailValid = false;
+                } else if (result.exists) {
+                    setInputStatus('signupEmail', 'signupEmailStatus', 'signupEmailStatusText', 'error', 'Email already registered. Please login.');
+                    signupEmailValid = false;
+                } else {
+                    setInputStatus('signupEmail', 'signupEmailStatus', 'signupEmailStatusText', 'success', 'Email available!');
+                    signupEmailValid = true;
+                }
+            }, 500);
+        });
+
+        document.getElementById('forgotEmail').addEventListener('input', function() {
+            clearTimeout(emailCheckTimeout);
+            const email = this.value.trim();
+            
+            if (!email || !email.includes('@')) {
+                setInputStatus('forgotEmail', 'forgotEmailStatus', 'forgotEmailStatusText', 'clear', '');
+                forgotEmailValid = false;
+                return;
+            }
+
+            setInputStatus('forgotEmail', 'forgotEmailStatus', 'forgotEmailStatusText', 'checking', '');
+            
+            emailCheckTimeout = setTimeout(async () => {
+                const result = await checkEmailExists(email);
+                
+                if (result.error) {
+                    setInputStatus('forgotEmail', 'forgotEmailStatus', 'forgotEmailStatusText', 'error', 'Connection error. Try again.');
+                    forgotEmailValid = false;
+                } else if (result.exists) {
+                    setInputStatus('forgotEmail', 'forgotEmailStatus', 'forgotEmailStatusText', 'success', 'Account found! Click reset to proceed.');
+                    forgotEmailValid = true;
+                } else {
+                    setInputStatus('forgotEmail', 'forgotEmailStatus', 'forgotEmailStatusText', 'error', 'User not found. Please sign up first.');
+                    forgotEmailValid = false;
+                }
+            }, 500);
+        });
 
         document.getElementById('loginForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             clearAlert();
-            setLoading('loginBtn', true);
 
             const email = document.getElementById('loginEmail').value.trim();
             const password = document.getElementById('loginPassword').value;
 
+            if (!loginEmailValid) {
+                const result = await checkEmailExists(email);
+                if (!result.exists) {
+                    showAlert('No account found with this email. Please sign up first.', 'error');
+                    return;
+                }
+            }
+
+            setLoading('loginBtn', true);
+            showLoading('Checking your account...');
+
             try {
-                const userCheck = await checkEmailHasUsername(email);
-                if (!userCheck.success) {
+                const dbCheck = await fetch(`${API_BASE}/api/users/check-email/${encodeURIComponent(email)}`);
+                const dbData = await dbCheck.json();
+
+                if (!dbData.exists) {
+                    hideLoading();
                     showAlert('No account found with this email. Please sign up first.', 'error');
                     setLoading('loginBtn', false);
                     return;
                 }
 
+                showLoading('Authenticating...');
+
                 const userCredential = await signInWithEmailAndPassword(auth, email, password);
                 const user = userCredential.user;
 
+                showLoading('Loading your dashboard...');
+
                 localStorage.setItem('userEmail', email);
-                localStorage.setItem('username', userCheck.user.username);
                 localStorage.setItem('firebaseUid', user.uid);
 
                 showAlert('Login successful! Redirecting...', 'success');
+                
                 setTimeout(() => {
-                    window.location.href = '/';
+                    hideLoading();
+                    window.location.href = 'index.html';
                 }, 1000);
             } catch (error) {
+                hideLoading();
                 console.error('Login error:', error);
                 let message = 'Login failed. Please try again.';
                 if (error.code === 'auth/user-not-found') {
                     message = 'No account found with this email.';
-                } else if (error.code === 'auth/wrong-password') {
-                    message = 'Incorrect password.';
+                } else if (error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
+                    message = 'Incorrect password. Please try again.';
                 } else if (error.code === 'auth/invalid-email') {
                     message = 'Invalid email address.';
                 } else if (error.code === 'auth/too-many-requests') {
@@ -640,79 +900,83 @@
         document.getElementById('signupForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             clearAlert();
-            setLoading('signupBtn', true);
 
-            const username = document.getElementById('signupUsername').value.trim();
             const email = document.getElementById('signupEmail').value.trim();
-            const phone = '254' + document.getElementById('signupPhone').value.trim();
+            const phone = document.getElementById('signupPhone').value.trim();
             const password = document.getElementById('signupPassword').value;
             const confirmPassword = document.getElementById('signupConfirmPassword').value;
 
             if (password !== confirmPassword) {
                 showAlert('Passwords do not match.', 'error');
-                setLoading('signupBtn', false);
                 return;
             }
 
-            if (username.length < 3) {
-                showAlert('Username must be at least 3 characters.', 'error');
-                setLoading('signupBtn', false);
+            if (phone.length < 9) {
+                showAlert('Please enter a valid phone number.', 'error');
                 return;
             }
 
-            if (!/^[a-zA-Z0-9_]+$/.test(username)) {
-                showAlert('Username can only contain letters, numbers, and underscores.', 'error');
-                setLoading('signupBtn', false);
-                return;
-            }
+            setLoading('signupBtn', true);
+            showLoading('Checking email availability...');
 
             try {
-                const usernameExists = await checkUsernameExists(username);
-                if (usernameExists) {
-                    showAlert('Username is already taken. Please choose another.', 'error');
+                const emailCheck = await checkEmailExists(email);
+                if (emailCheck.exists) {
+                    hideLoading();
+                    showAlert('Email already registered. Please login instead.', 'error');
                     setLoading('signupBtn', false);
                     return;
                 }
+
+                showLoading('Creating your account...');
+
+                const registerResponse = await fetch(`${API_BASE}/api/users/register`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email })
+                });
+
+                const registerData = await registerResponse.json();
+
+                if (!registerData.success) {
+                    hideLoading();
+                    showAlert(registerData.message || 'Registration failed. Please try again.', 'error');
+                    setLoading('signupBtn', false);
+                    return;
+                }
+
+                showLoading('Setting up your account...');
 
                 const userCredential = await createUserWithEmailAndPassword(auth, email, password);
                 const user = userCredential.user;
 
-                const response = await fetch(`${API_BASE}/api/users/register`, {
+                await fetch(`${API_BASE}/api/users/update-firebase-uid`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        username,
-                        email,
-                        phone: phone,
-                        firebase_uid: user.uid
-                    })
+                    body: JSON.stringify({ email, firebase_uid: user.uid })
                 });
 
-                const data = await response.json();
-
-                if (!data.success) {
-                    showAlert(data.message || 'Registration failed.', 'error');
-                    setLoading('signupBtn', false);
-                    return;
-                }
-
                 localStorage.setItem('userEmail', email);
-                localStorage.setItem('username', username);
+                localStorage.setItem('userPhone', '254' + phone);
                 localStorage.setItem('firebaseUid', user.uid);
 
+                showLoading('Welcome! Redirecting to dashboard...');
                 showAlert('Account created successfully! Redirecting...', 'success');
+
                 setTimeout(() => {
-                    window.location.href = '/';
+                    hideLoading();
+                    window.location.href = 'index.html';
                 }, 1500);
             } catch (error) {
+                hideLoading();
                 console.error('Signup error:', error);
                 let message = 'Registration failed. Please try again.';
                 if (error.code === 'auth/email-already-in-use') {
-                    message = 'Email is already registered.';
-                } else if (error.code === 'auth/invalid-email') {
-                    message = 'Invalid email address.';
+                    message = 'Email already in use. Please login instead.';
                 } else if (error.code === 'auth/weak-password') {
                     message = 'Password is too weak. Use at least 6 characters.';
+                } else if (error.code === 'auth/invalid-email') {
+                    message = 'Invalid email address.';
                 }
                 showAlert(message, 'error');
             }
@@ -722,25 +986,39 @@
         document.getElementById('forgotForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             clearAlert();
-            setLoading('forgotBtn', true);
 
             const email = document.getElementById('forgotEmail').value.trim();
 
+            setLoading('forgotBtn', true);
+            showLoading('Verifying your account...');
+
             try {
-                const userCheck = await checkEmailHasUsername(email);
-                if (!userCheck.success) {
-                    showAlert('No account found with this email address.', 'error');
+                const dbCheck = await fetch(`${API_BASE}/api/users/check-email/${encodeURIComponent(email)}`);
+                const dbData = await dbCheck.json();
+
+                if (!dbData.exists) {
+                    hideLoading();
+                    showAlert('User not found. Please sign up first.', 'error');
                     setLoading('forgotBtn', false);
                     return;
                 }
 
+                showLoading('Sending reset link...');
+
                 await sendPasswordResetEmail(auth, email);
+
+                hideLoading();
                 showAlert('Password reset link sent! Check your email inbox.', 'success');
             } catch (error) {
-                console.error('Password reset error:', error);
+                hideLoading();
+                console.error('Forgot password error:', error);
                 let message = 'Failed to send reset link. Please try again.';
                 if (error.code === 'auth/user-not-found') {
                     message = 'No account found with this email.';
+                } else if (error.code === 'auth/invalid-email') {
+                    message = 'Invalid email address.';
+                } else if (error.code === 'auth/too-many-requests') {
+                    message = 'Too many attempts. Please try again later.';
                 }
                 showAlert(message, 'error');
             }
@@ -748,8 +1026,8 @@
         });
 
         onAuthStateChanged(auth, (user) => {
-            if (user && localStorage.getItem('username')) {
-                window.location.href = '/';
+            if (user && localStorage.getItem('userEmail')) {
+                window.location.href = 'index.html';
             }
         });
     </script>
