@@ -35,7 +35,7 @@ pool.connect((err, client, release) => {
 // Middleware
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors({
-    origin: process.env.FRONTEND_ORIGIN || 'https://frontend.onrender.com',
+    origin: process.env.FRONTEND_ORIGIN || 'https://airtimetest.onrender.com',
     credentials: true
 }));
 app.use(express.json());
@@ -82,7 +82,7 @@ const PAYNECTA_EMAIL = process.env.PAYNECTA_EMAIL;
 const STATUM_CONSUMER_KEY = process.env.STATUM_CONSUMER_KEY;
 const STATUM_CONSUMER_SECRET = process.env.STATUM_CONSUMER_SECRET;
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '3462Abel@#';
-const CALLBACK_BASE_URL = process.env.CALLBACK_BASE_URL || 'https://callbackurl.onrender.com';
+const CALLBACK_BASE_URL = process.env.CALLBACK_BASE_URL || 'https://airtimeserver.onrender.com';
 const PAYHERO_LINK = 'https://short.payhero.co.ke/s/oEvAxA8Xx6cDoBLxntShmF';
 
 // Bonus calculation for deposits
@@ -1237,7 +1237,7 @@ app.get('/admin', (req, res) => {
 
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`Server running on port ${PORT}`);
-    console.log(`Frontend origin: ${process.env.FRONTEND_ORIGIN || 'https://frontend.onrender.com'}`);
+    console.log(`Frontend origin: ${process.env.FRONTEND_ORIGIN || 'https://airtimetest.onrender.com'}`);
     console.log(`Callback URL: ${CALLBACK_BASE_URL}`);
 });
 
